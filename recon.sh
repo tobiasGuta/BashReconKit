@@ -3,7 +3,7 @@
 # Function to perform WHOIS lookup
 function whois_lookup {
     echo -e "\nWHOIS Information:"
-    whois $1
+    whois "$1"
 }
 
 # Function to perform reverse WHOIS lookup
@@ -15,13 +15,13 @@ function reverse_whois {
 # Function to perform nslookup
 function nslookup_target {
     echo -e "\nNslookup Result:"
-    nslookup $1
+    nslookup "$1"
 }
 
 # Function to perform reverse IP lookup
 function reverse_ip_lookup {
-    # Placeholder for reverse IP lookup function
-    echo -e "\nReverse IP lookup not implemented yet"
+    echo -e "\nReverse IP Lookup:"
+    host "$1"
 }
 
 # Function to perform ASN lookup
@@ -50,11 +50,11 @@ function main {
         read -p "Enter your choice: " choice
         
         case $choice in
-            1) whois_lookup $target ;;
-            2) reverse_whois $target ;;
-            3) nslookup_target $target ;;
-            4) reverse_ip_lookup $target ;;
-            5) asn_lookup $target ;;
+            1) whois_lookup "$target" ;;
+            2) reverse_whois "$target" ;;
+            3) nslookup_target "$target" ;;
+            4) reverse_ip_lookup "$target" ;;
+            5) asn_lookup "$target" ;;
             6) read -p "Enter the new target domain or IP address: " target ;;
             7) echo "Exiting..."; exit ;;
             *) echo "Invalid choice!" ;;
