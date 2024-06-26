@@ -70,7 +70,12 @@ function dig_txt_records {
 function dig_cname_record {
     local domain="$1"
     echo -e "\nCNAME Record:"
-    dig "$domain" CNAME +short
+    result=$(dig "$domain" CNAME +short)
+    if [ -z "$result" ]; then
+        echo "No CNAME record found."
+    else
+        echo "$result"
+    fi
 }
 
 # Function to perform DNS lookup for SOA record
