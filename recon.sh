@@ -1,5 +1,40 @@
 #!/bin/bash
 
+# Function to display help
+function display_help {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -h, 							--help           Display this help menu"
+    echo "  -t, 							--target <target> Specify the target domain or IP address"
+    echo
+    echo "Description:"
+    echo "This script allows you to perform various reconnaissance tasks on a target domain or IP address."
+    echo "You can choose from the following options:"
+    echo
+    echo
+    echo "1. WHOIS lookup 					- Retrieves WHOIS information for the target domain or IP address."
+    echo "2. Reverse WHOIS lookup 				- (Not implemented) Perform a reverse WHOIS lookup based on the provided information."
+    echo "3. nslookup 						- Performs a DNS lookup to retrieve DNS information about the target."
+    echo "4. Reverse IP lookup 					- Performs a reverse DNS lookup to find domains associated with an IP address."
+    echo "5. ASN lookup 						- Retrieves Autonomous System Number (ASN) information for the target."
+    echo "6. DNS lookup (A record) 				- Retrieves the IPv4 address associated with the domain."
+    echo "7. DNS lookup (AAAA record) 				- Retrieves the IPv6 address associated with the domain."
+    echo "8. DNS lookup (MX records) 				- Finds the mail servers responsible for the domain."
+    echo "9. DNS lookup (NS records) 				- Identifies the authoritative name servers for the domain."
+    echo "10. DNS lookup (TXT records) 				- Retrieves any TXT records associated with the domain."
+    echo "11. DNS lookup (CNAME record) 				- Retrieves the canonical name (CNAME) record for the domain."
+    echo "12. DNS lookup (SOA record) 				- Retrieves the start of authority (SOA) record for the domain."
+    echo "13. DNS lookup with specific nameserver 		- Performs DNS lookup using a specific nameserver."
+    echo "14. DNS trace 						- Shows the full path of DNS resolution."
+    echo "15. Reverse DNS lookup (dig -x) 			- Performs a reverse lookup on the IP address to find the associated host name."
+    echo "16. Short answer DNS lookup 				- Provides a short, concise answer to the DNS query."
+    echo "17. Answer section DNS lookup 				- Displays only the answer section of the DNS query output."
+    echo "18. DNS lookup (ANY record) 				- Retrieves all available DNS records for the domain."
+    echo "19. Change target 					- Change the target domain or IP address."
+    echo "20. Exit 						- Exit the script."
+    exit 1
+}
+
 # Function to perform WHOIS lookup
 function whois_lookup {
     echo -e "\nWHOIS Information:"
@@ -8,7 +43,6 @@ function whois_lookup {
 
 # Function to perform reverse WHOIS lookup
 function reverse_whois {
-    # Placeholder for reverse WHOIS lookup function
     echo -e "\nReverse WHOIS lookup not implemented yet"
 }
 
@@ -31,107 +65,12 @@ function asn_lookup {
     echo "$output"
 }
 
-# Function to perform DNS lookup for A record
-function dig_a_record {
-    local domain="$1"
-    echo -e "\nA Record Lookup:"
-    dig "$domain" A +short
-}
-
-# Function to perform DNS lookup for AAAA record (IPv6)
-function dig_aaaa_record {
-    local domain="$1"
-    echo -e "\nAAAA Record Lookup:"
-    dig "$domain" AAAA +short
-}
-
-# Function to perform DNS lookup for MX records
-function dig_mx_records {
-    local domain="$1"
-    echo -e "\nMX Records:"
-    dig "$domain" MX +short
-}
-
-# Function to perform DNS lookup for NS records
-function dig_ns_records {
-    local domain="$1"
-    echo -e "\nNS Records:"
-    dig "$domain" NS +short
-}
-
-# Function to perform DNS lookup for TXT records
-function dig_txt_records {
-    local domain="$1"
-    echo -e "\nTXT Records:"
-    dig "$domain" TXT +short
-}
-
-# Function to perform DNS lookup for CNAME record
-function dig_cname_record {
-    local domain="$1"
-    echo -e "\nCNAME Record:"
-    result=$(dig "$domain" CNAME +short)
-    if [ -z "$result" ]; then
-        echo "No CNAME record found."
-    else
-        echo "$result"
-    fi
-}
-
-# Function to perform DNS lookup for SOA record
-function dig_soa_record {
-    local domain="$1"
-    echo -e "\nSOA Record:"
-    dig "$domain" SOA +short
-}
-
-# Function to perform DNS lookup with specific name server
-function dig_with_nameserver {
-    local nameserver="$1"
-    local domain="$2"
-    echo -e "\nDNS Lookup with specific nameserver ($nameserver):"
-    dig "@$nameserver" "$domain" +short
-}
-
-# Function to perform DNS trace
-function dig_trace {
-    local domain="$1"
-    echo -e "\nDNS Trace:"
-    dig "$domain" +trace
-}
-
-# Function to perform reverse DNS lookup
-function dig_reverse_lookup {
-    local ip_address="$1"
-    echo -e "\nReverse DNS Lookup:"
-    dig -x "$ip_address" +short
-}
-
-# Function to perform short answer DNS lookup
-function dig_short_answer {
-    local domain="$1"
-    echo -e "\nShort Answer DNS Lookup:"
-    dig "$domain" +short
-}
-
-# Function to display only answer section of DNS lookup
-function dig_answer_section {
-    local domain="$1"
-    echo -e "\nAnswer Section:"
-    dig "$domain" +noall +answer
-}
-
-# Function to perform ANY record DNS lookup
-function dig_any_record {
-    local domain="$1"
-    echo -e "\nANY Record Lookup:"
-    dig "$domain" ANY
-}
-
 # Main function
 function main {
     # Prompt the user for the target domain or IP address
-    read -p "Enter the target domain or IP address: " target
+    if [ -z "$target" ]; then
+        read -p "Enter the target domain or IP address: " target
+    fi
 
     while true; do
         echo -e "\nWhat would you like to do?"
@@ -165,21 +104,21 @@ function main {
             3) nslookup_target "$target" ;;
             4) reverse_ip_lookup "$target" ;;
             5) asn_lookup "$target" ;;
-            6) dig_a_record "$target" ;;
-            7) dig_aaaa_record "$target" ;;
-            8) dig_mx_records "$target" ;;
-            9) dig_ns_records "$target" ;;
-            10) dig_txt_records "$target" ;;
-            11) dig_cname_record "$target" ;;
-            12) dig_soa_record "$target" ;;
-            13) 
-                read -p "Enter the specific nameserver (e.g., 1.1.1.1): " nameserver
-                dig_with_nameserver "$nameserver" "$target" ;;
-            14) dig_trace "$target" ;;
-            15) dig_reverse_lookup "$target" ;;
-            16) dig_short_answer "$target" ;;
-            17) dig_answer_section "$target" ;;
-            18) dig_any_record "$target" ;;
+            6) dig "$target" ;;
+            7) dig "$target" AAAA ;;
+            8) dig "$target" MX ;;
+            9) dig "$target" NS ;;
+            10) dig "$target" TXT ;;
+            11) dig "$target" CNAME ;;
+            12) dig "$target" SOA ;;
+            13) read -p "Enter the nameserver: " nameserver
+                dig "@$nameserver" "$target" ;;
+            14) dig +trace "$target" ;;
+            15) read -p "Enter the IP address: " ip_address
+                dig -x "$ip_address" ;;
+            16) dig +short "$target" ;;
+            17) dig +noall +answer "$target" ;;
+            18) dig "$target" ANY ;;
             19) read -p "Enter the new target domain or IP address: " target ;;
             20) echo "Exiting..."; exit ;;
             *) echo "Invalid choice!" ;;
@@ -196,5 +135,30 @@ function main {
     done
 }
 
-# Call the main function
-main
+# Process command-line options
+while [[ $# -gt 0 ]]; do
+    key="$1"
+
+    case $key in
+        -h|--help)
+        display_help
+        ;;
+        -t|--target)
+        target="$2"
+        shift # past argument
+        shift # past value
+        ;;
+        *)    # unknown option
+        echo "Unknown option: $1"
+        display_help
+        ;;
+    esac
+done
+
+# Call the main function if no command-line options were provided
+if [ -z "$target" ]; then
+    main
+else
+    # If target is provided via command-line, directly execute the corresponding action
+    dig "$target"
+fi
