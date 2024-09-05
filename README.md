@@ -42,7 +42,8 @@ DNS Lookups:
     -h, --help: Display the help menu.
     -t, --target <target>: Specify the target domain or IP address.
 
-![Screenshot from 2024-09-05 14-29-51](https://github.com/user-attachments/assets/56b520b7-dac0-4062-88be-53b191adc993)
+
+![recon](https://github.com/user-attachments/assets/0ef8a136-a138-415c-8a37-0b9619271e31)
 
 # Example
 
