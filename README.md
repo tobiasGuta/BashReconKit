@@ -25,6 +25,12 @@ DNS Lookups:
     DNS Lookup with Specific Nameserver: Allows querying through a specified nameserver.
     Change Target: Easily switch the target domain or IP address.
     Exit: Exit the script.
+
+# Installation 
+
+    git clone https://github.com/tobiasGuta/BashReconKit.git
+    cd BashReconKit
+    chmod +x recon.sh
     
 # Usage
 
