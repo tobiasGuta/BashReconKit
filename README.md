@@ -26,6 +26,7 @@ DNS Lookups:
     Change Target: Easily switch the target domain or IP address.
     Exit: Exit the script.
 
+
 # Installation 
 
     git clone https://github.com/tobiasGuta/BashReconKit.git
@@ -40,6 +41,8 @@ DNS Lookups:
 
     -h, --help: Display the help menu.
     -t, --target <target>: Specify the target domain or IP address.
+
+![Screenshot from 2024-09-05 14-29-51](https://github.com/user-attachments/assets/56b520b7-dac0-4062-88be-53b191adc993)
 
 # Example
 
