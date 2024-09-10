@@ -37,8 +37,6 @@ DNS Lookups:
 
     ./recon_script.sh [options]
 
-# Options
-
     -h, --help: Display the help menu.
     -t, --target <target>: Specify the target domain or IP address.
 
@@ -51,11 +49,19 @@ To perform a WHOIS lookup on example.com:
 
     ./recon_script.sh -t example.com
     
-# Prerequisites
+# Reconnaissance Tasks Available:
+WHOIS lookup
+Reverse WHOIS lookup
+nslookup
+Reverse IP lookup
+ASN lookup
+DNS lookup (A, AAAA, MX, NS, TXT, CNAME, SOA, ANY records)
+DNS trace
+Reverse DNS lookup (dig -x)
+Change target
+Exit
+The script provides flexibility by allowing the user to specify a target domain or IP address and execute multiple reconnaissance tasks in a single session.
 
-Ensure you have the necessary tools installed on your system:
-
-    whois
-    nslookup
-    dig
-    host
+Notes:
+Some features, like reverse WHOIS lookup, are not yet implemented.
+DNS queries are executed using dig, whois, and other network tools commonly available on Unix-based systems.
