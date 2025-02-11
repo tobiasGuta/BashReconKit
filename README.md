@@ -1,44 +1,34 @@
 Reconnaissance Script
-This script provides a suite of tools for performing reconnaissance tasks on a specified domain or IP address. It is designed to facilitate various network and DNS investigations from a single interface.
+This Python script is a tool for performing various network reconnaissance tasks, primarily aimed at gathering information about a target domain or IP address. Here's a breakdown of what it does:
 
-# Features
+WHOIS Lookup (whois_lookup):
 
-WHOIS Lookup: Retrieves WHOIS information for the target domain or IP address.
-Reverse WHOIS Lookup: (Not implemented) Intended for reverse WHOIS lookups.
-nslookup: Performs DNS lookups to retrieve DNS information about the target.
-Reverse IP Lookup: Identifies domains associated with a given IP address.
-ASN Lookup: Retrieves Autonomous System Number (ASN) information.
-DNS Lookups:
+Uses the whois command to retrieve domain registration details (such as registrant, contact info, etc.) for a given domain or IP address.
+DNS SOA Lookup (dig_soa_lookup):
 
-    A record: IPv4 address
-    AAAA record: IPv6 address
-    MX records: Mail servers
-    NS records: Authoritative name servers
-    TXT records: Text records
-    CNAME record: Canonical name
-    SOA record: Start of authority
-    ANY record: All available DNS records
-    DNS Trace: Shows the path of DNS resolution.
-    Reverse DNS Lookup (dig -x): Performs a reverse lookup on an IP address to find the associated hostname.
-    Short Answer DNS Lookup: Provides concise DNS query results.
-    Answer Section DNS Lookup: Displays only the answer section of DNS query output.
-    DNS Lookup with Specific Nameserver: Allows querying through a specified nameserver.
-    Change Target: Easily switch the target domain or IP address.
-    Exit: Exit the script.
+Uses the dig command to perform a Start of Authority (SOA) lookup, which provides authoritative information about a domain, including the primary nameserver and other metadata.
+DNS NS Lookup with Custom Nameserver (dig_custom_ns_lookup):
+
+Uses the dig command to query the Name Server (NS) records for a domain, but with the ability to specify a custom nameserver.
+DNS Zone Transfer Lookup (dig_zone_transfer_lookup):
+
+Uses dig to attempt a DNS zone transfer (AXFR), which is an operation where a secondary DNS server retrieves a complete zone file from the primary nameserver. This can sometimes leak DNS data about the domain if misconfigured.
+Subdomain Enumeration (dig_subdomain_enum):
+
+This function performs subdomain enumeration by reading a wordlist and using dig to try resolving possible subdomains for the target domain. If a subdomain resolves to an IP address, it is saved and displayed.
+Interactive Menu (main):
+
+The script provides an interactive menu where the user can select one of the above operations and input the necessary information (such as the target domain, IP addresses, or custom wordlist paths). The results are displayed in the terminal, and relevant data is saved (e.g., found subdomains are written to a file named subdomains.txt).
 
 
 # Installation 
 
     git clone https://github.com/tobiasGuta/BashReconKit.git
     cd BashReconKit
-    chmod +x recon.sh
     
 # Usage
 
-    ./recon_script.sh [options]
-
-    -h, --help: Display the help menu.
-    -t, --target <target>: Specify the target domain or IP address.
+    python3 recon.py [options]
 
 
 ![recon](https://github.com/user-attachments/assets/0ef8a136-a138-415c-8a37-0b9619271e31)
@@ -47,21 +37,5 @@ DNS Lookups:
 
 To perform a WHOIS lookup on example.com:
 
-    ./recon_script.sh -t example.com
+    python3 recon.py
     
-# Reconnaissance Tasks Available:
-WHOIS lookup
-Reverse WHOIS lookup
-nslookup
-Reverse IP lookup
-ASN lookup
-DNS lookup (A, AAAA, MX, NS, TXT, CNAME, SOA, ANY records)
-DNS trace
-Reverse DNS lookup (dig -x)
-Change target
-Exit
-The script provides flexibility by allowing the user to specify a target domain or IP address and execute multiple reconnaissance tasks in a single session.
-
-Notes:
-Some features, like reverse WHOIS lookup, are not yet implemented.
-DNS queries are executed using dig, whois, and other network tools commonly available on Unix-based systems.
