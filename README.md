@@ -34,9 +34,4 @@ The script provides an interactive menu where the user can select one of the abo
 ![image](https://github.com/user-attachments/assets/8af87f55-2840-42af-a81c-136dd23bd06d)
 
 
-# Example
-
-To perform a WHOIS lookup on example.com:
-
-    python3 recon.py
     
