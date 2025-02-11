@@ -1,6 +1,6 @@
 import subprocess
 import os
-import re
+import requests
 
 art = """
                                      @@@@@@@                               
@@ -112,6 +112,74 @@ def dig_subdomain_enum(target, dns_server, wordlist_path):
                 except subprocess.CalledProcessError as e:
                     print(f"Error with {subdomain_full}: {e}")
 
+def ping_viewdns(target, api_key):
+    """Performs a ping using the ViewDNS API."""
+    try:
+        # Construct the URL with the provided target and API key
+        url = f"https://api.viewdns.info/ping/?host={target}&apikey={api_key}&output=json"
+        
+        # Make the API request
+        response = requests.get(url)
+        
+        # Parse the JSON response
+        data = response.json()
+        
+        # Extract RTT values and display them
+        if "response" in data and "replys" in data["response"]:
+            print(f"Ping results for {target}:")
+            for reply in data["response"]["replys"]:
+                print(f"RTT: {reply['rtt']}")
+        else:
+            print("No ping response or invalid data.")
+    except Exception as e:
+        print(f"Error during ping: {e}")
+
+def reverse_ip_lookup(target, api_key):
+    """Performs a reverse IP lookup using the ViewDNS API."""
+    try:
+        # Construct the URL with the provided target and API key
+        url = f"https://api.viewdns.info/reverseip/?host={target}&apikey={api_key}&output=json"
+        
+        # Make the API request
+        response = requests.get(url)
+        
+        # Parse the JSON response
+        data = response.json()
+        
+        # Extract domains and last resolved dates
+        if "response" in data and "domains" in data["response"]:
+            print(f"Reverse IP Lookup results for {target}:")
+            domain_count = data["response"]["domain_count"]
+            print(f"Total domains found: {domain_count}")
+            for domain in data["response"]["domains"]:
+                print(f"Domain: {domain['name']}, Last Resolved: {domain['last_resolved']}")
+        else:
+            print("No domains found or invalid data.")
+    except Exception as e:
+        print(f"Error during reverse IP lookup: {e}")
+
+def port_scan_lookup(target, api_key):
+    """Performs a port scan using the ViewDNS API."""
+    try:
+        # Construct the URL with the provided target and API key
+        url = f"https://api.viewdns.info/portscan/?host={target}&apikey={api_key}&output=json"
+        
+        # Make the API request
+        response = requests.get(url)
+        
+        # Parse the JSON response
+        data = response.json()
+        
+        # Extract ports and their status
+        if "response" in data and "port" in data["response"]:
+            print(f"Port scan results for {target}:")
+            for port in data["response"]["port"]:
+                print(f"Port {port['number']} ({port['service']}): {port['status']}")
+        else:
+            print("No port scan results or invalid data.")
+    except Exception as e:
+        print(f"Error during port scan lookup: {e}")
+
 def main():
     while True:
         # Display menu
@@ -122,7 +190,10 @@ def main():
         print("3. DIG NS Lookup with Custom Nameserver")
         print("4. DIG Zone Transfer (AXFR) Lookup with Custom Nameserver")
         print("5. Subdomain Enumeration (using a wordlist)")
-        print("6. Exit")
+        print("6. Ping using ViewDNS API")
+        print("7. Reverse IP Lookup using ViewDNS API")
+        print("8. Port Scan using ViewDNS API")
+        print("9. Exit")
         
         # Get user choice
         choice = input("Enter your choice: ")
@@ -145,11 +216,20 @@ def main():
             target = input("Enter the target domain (e.g., example.com): ")
             dns_server = input("Enter the DNS server IP (e.g., 10.129.14.128): ")
             wordlist_path = input("Enter the path to your subdomain wordlist (e.g., /path/to/wordlist.txt): ")
-
-            # Perform subdomain enumeration
             dig_subdomain_enum(target, dns_server, wordlist_path)
-
         elif choice == '6':
+            api_key = input("Enter your ViewDNS API key: ")
+            target = input("Enter the target domain for ping (e.g., example.com): ")
+            ping_viewdns(target, api_key)
+        elif choice == '7':
+            api_key = input("Enter your ViewDNS API key: ")
+            target = input("Enter the target domain for reverse IP lookup (e.g., example.com): ")
+            reverse_ip_lookup(target, api_key)
+        elif choice == '8':
+            api_key = input("Enter your ViewDNS API key: ")
+            target = input("Enter the target domain for port scan (e.g., example.com): ")
+            port_scan_lookup(target, api_key)
+        elif choice == '9':
             print("Exiting...")
             break
         else:
