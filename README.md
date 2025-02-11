@@ -1,24 +1,32 @@
 Reconnaissance Script
-This Python script is a tool for performing various network reconnaissance tasks, primarily aimed at gathering information about a target domain or IP address. Here's a breakdown of what it does:
+This tool is a command-line based network reconnaissance tool with various functionalities useful for information gathering and vulnerability assessment in the context of cybersecurity. It integrates several techniques to gather DNS and WHOIS information, perform subdomain enumeration, and utilize external APIs for additional services like port scanning and reverse IP lookup.
 
-WHOIS Lookup (whois_lookup):
+Here's a breakdown of its features:
 
-Uses the whois command to retrieve domain registration details (such as registrant, contact info, etc.) for a given domain or IP address.
-DNS SOA Lookup (dig_soa_lookup):
+WHOIS Lookup:
 
-Uses the dig command to perform a Start of Authority (SOA) lookup, which provides authoritative information about a domain, including the primary nameserver and other metadata.
-DNS NS Lookup with Custom Nameserver (dig_custom_ns_lookup):
+Performs a WHOIS query to retrieve registration details about a domain or IP address.
+DIG SOA Lookup:
 
-Uses the dig command to query the Name Server (NS) records for a domain, but with the ability to specify a custom nameserver.
-DNS Zone Transfer Lookup (dig_zone_transfer_lookup):
+Retrieves the Start of Authority (SOA) record for a domain using the dig tool, which helps in understanding the authoritative DNS information for the domain.
+DIG NS Lookup (Custom Nameserver):
 
-Uses dig to attempt a DNS zone transfer (AXFR), which is an operation where a secondary DNS server retrieves a complete zone file from the primary nameserver. This can sometimes leak DNS data about the domain if misconfigured.
-Subdomain Enumeration (dig_subdomain_enum):
+Performs DNS NS (Nameserver) lookup using a specified custom nameserver.
+DIG Zone Transfer (AXFR) Lookup:
 
-This function performs subdomain enumeration by reading a wordlist and using dig to try resolving possible subdomains for the target domain. If a subdomain resolves to an IP address, it is saved and displayed.
-Interactive Menu (main):
+Attempts a DNS zone transfer (AXFR) using a custom nameserver to retrieve all DNS records associated with a domain. This can be useful for gathering more information from a misconfigured nameserver.
+Subdomain Enumeration:
 
-The script provides an interactive menu where the user can select one of the above operations and input the necessary information (such as the target domain, IP addresses, or custom wordlist paths). The results are displayed in the terminal, and relevant data is saved (e.g., found subdomains are written to a file named subdomains.txt).
+Enumerates subdomains of a given target domain using a wordlist and performs DNS resolution for each subdomain using a DNS server.
+Ping (ViewDNS API):
+
+Uses the ViewDNS API to perform a ping to a domain and retrieve round-trip time (RTT) values for network diagnostics.
+Reverse IP Lookup (ViewDNS API):
+
+Performs a reverse IP lookup using the ViewDNS API to find domains hosted on the same IP address.
+Port Scan Lookup (ViewDNS API):
+
+Queries the ViewDNS API to perform a port scan on the target domain or IP to detect open ports and associated services.
 
 
 # Installation 
