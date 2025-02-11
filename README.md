@@ -31,7 +31,8 @@ The script provides an interactive menu where the user can select one of the abo
     python3 recon.py [options]
 
 
-![recon](https://github.com/user-attachments/assets/0ef8a136-a138-415c-8a37-0b9619271e31)
+![image](https://github.com/user-attachments/assets/8af87f55-2840-42af-a81c-136dd23bd06d)
+
 
 # Example
 
