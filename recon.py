@@ -2,6 +2,7 @@ import subprocess
 import os
 import requests
 import re
+import time
 from colorama import Fore, Style, init
 from pyfiglet import figlet_format
 
@@ -35,22 +36,16 @@ def dig_soa_lookup(target):
 def nslookup_record(domain, record_type, dns_server=None):
     print_section(f"NSLOOKUP - Type: {record_type.upper()}")
 
-    # Build the command dynamically
     cmd = ["nslookup", f"-type={record_type}", domain]
     if dns_server:
         cmd.append(dns_server)
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         print(Fore.GREEN + result.stdout)
     except subprocess.CalledProcessError as e:
         print(Fore.RED + f"Error running nslookup: {e}")
-        
+
 def dig_custom_ns_lookup(target, nameserver):
     print_section("DIG NS Lookup (Custom Nameserver)")
     try:
@@ -88,13 +83,56 @@ def dig_subdomain_enum(target, dns_server, wordlist_path):
                     result = subprocess.run(["dig", subdomain_full, "@" + dns_server], capture_output=True, text=True, check=True)
                     output = result.stdout
                     if "ANSWER SECTION" in output and "A" in output:
-                        matches = re.findall(rf"([\w.-]+\.{target})\\s+\\d+\\s+IN\\s+A\\s+([\\d.]+)", output)
+                        matches = re.findall(rf"([\w.-]+\\.{target})\\s+\\d+\\s+IN\\s+A\\s+([\\d.]+)", output)
                         for domain, ip in matches:
                             with open("subdomains.txt", "a") as f:
                                 f.write(f"{domain} IN A {ip}\n")
                             print(Fore.YELLOW + f"[+] Subdomain: {Fore.GREEN}{domain} {Fore.YELLOW}→ IP: {Fore.CYAN}{ip}")
                 except subprocess.CalledProcessError as e:
                     print(Fore.RED + f"Error with {subdomain_full}: {e}")
+
+def subdomain_enum_dnsdumpster(domain, api_key):
+    print_section("Subdomain Enumeration - DNSDumpster")
+    url = f"https://api.dnsdumpster.com/domain/{domain}"
+    headers = {
+        "X-API-Key": api_key,
+        "User-Agent": "ReconN3t/1.0 (Python)",
+        "Accept": "application/json",
+    }
+
+    try:
+        time.sleep(2)
+        response = requests.get(url, headers=headers)
+
+        if response.status_code == 429:
+            print(Fore.RED + "Rate limit exceeded. Please wait 2 seconds between requests.")
+            return
+
+        elif response.status_code != 200:
+            print(Fore.RED + f"Error: Received status code {response.status_code}")
+            print(Fore.YELLOW + f"Raw Response: {response.text}")
+            return
+
+        data = response.json()
+
+        found = False
+        for section in ["a", "ns", "mx", "cname"]:
+            for record in data.get(section, []):
+                host = record.get("host")
+                ips = record.get("ips", [])
+                for ip_info in ips:
+                    ip = ip_info.get("ip")
+                    if host and ip:
+                        found = True
+                        print(Fore.GREEN + f"{host} → {ip}")
+                        with open("subdomains_dnsdumpster.txt", "a") as f:
+                            f.write(f"{host} → {ip}\n")
+
+        if not found:
+            print(Fore.YELLOW + "No subdomains found or API response was empty.")
+
+    except Exception as e:
+        print(Fore.RED + f"Error during DNSDumpster lookup: {e}")
 
 def ping_viewdns(target, api_key):
     print_section("Ping using ViewDNS")
@@ -147,12 +185,13 @@ def main():
         print(f"{Fore.CYAN}2.{Style.RESET_ALL} DIG SOA Lookup")
         print(f"{Fore.CYAN}3.{Style.RESET_ALL} DIG NS Lookup with Custom Nameserver")
         print(f"{Fore.CYAN}4.{Style.RESET_ALL} DIG Zone Transfer (AXFR) Lookup")
-        print(f"{Fore.CYAN}5.{Style.RESET_ALL} Subdomain Enumeration")
-        print(f"{Fore.CYAN}6.{Style.RESET_ALL} Ping using ViewDNS API")
-        print(f"{Fore.CYAN}7.{Style.RESET_ALL} Reverse IP Lookup using ViewDNS API")
-        print(f"{Fore.CYAN}8.{Style.RESET_ALL} Port Scan using ViewDNS API")
-        print(f"{Fore.CYAN}9.{Style.RESET_ALL} NSLOOKUP with Custom Record Type & DNS")
-        print(f"{Fore.CYAN}10.{Style.RESET_ALL} Exit")
+        print(f"{Fore.CYAN}5.{Style.RESET_ALL} Subdomain Enumeration (DIG)")
+        print(f"{Fore.CYAN}6.{Style.RESET_ALL} Subdomain Enumeration (DNSDumpster API)")
+        print(f"{Fore.CYAN}7.{Style.RESET_ALL} Ping using ViewDNS API")
+        print(f"{Fore.CYAN}8.{Style.RESET_ALL} Reverse IP Lookup using ViewDNS API")
+        print(f"{Fore.CYAN}9.{Style.RESET_ALL} Port Scan using ViewDNS API")
+        print(f"{Fore.CYAN}10.{Style.RESET_ALL} NSLOOKUP with Custom Record Type & DNS")
+        print(f"{Fore.CYAN}11.{Style.RESET_ALL} Exit")
 
         choice = input(Fore.MAGENTA + "\nEnter your choice: ")
 
@@ -171,22 +210,26 @@ def main():
                 input("Enter subdomain wordlist path: ")
             )
         elif choice == "6":
-            ping_viewdns(input("Enter target domain: "), input("Enter ViewDNS API key: "))
+            subdomain_enum_dnsdumpster(
+                input("Enter domain to query with DNSDumpster: "),
+                input("Enter your DNSDumpster API key: ")
+            )
         elif choice == "7":
-            reverse_ip_lookup(input("Enter target domain: "), input("Enter ViewDNS API key: "))
+            ping_viewdns(input("Enter target domain: "), input("Enter ViewDNS API key: "))
         elif choice == "8":
-            port_scan_lookup(input("Enter target domain: "), input("Enter ViewDNS API key: "))
+            reverse_ip_lookup(input("Enter target domain: "), input("Enter ViewDNS API key: "))
         elif choice == "9":
+            port_scan_lookup(input("Enter target domain: "), input("Enter ViewDNS API key: "))
+        elif choice == "10":
             domain = input("Enter domain to lookup (e.g., example.com): ")
             record_type = input("Enter record type (A, MX, TXT, AAAA, etc): ").strip().upper()
             dns_server = input("Enter DNS server IP (optional, leave blank for default): ").strip()
-            
+
             if dns_server == "":
                 dns_server = None
-                
+
             nslookup_record(domain, record_type, dns_server)
-            
-        elif choice == "10":
+        elif choice == "11":
             print(Fore.RED + "Exiting ReconN3t...")
             break
         else:
