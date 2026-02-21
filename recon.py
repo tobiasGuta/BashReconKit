@@ -208,6 +208,8 @@ def port_scan_lookup(target, api_key):
         print(Fore.RED + f"Error during scan: {e}")
         return None
 
+# OSINT Pivoting Functions
+
 def robtex_ip_lookup(ip):
     print_section(f"Robtex - Passive DNS Lookup ({ip})")
     url = f"https://freeapi.robtex.com/ipquery/{ip}"
@@ -225,6 +227,53 @@ def robtex_ip_lookup(ip):
         return found_domains
     except Exception as e:
         print(Fore.RED + f"Error during Robtex lookup: {e}")
+        return []
+
+def threatminer_ip_lookup(ip):
+    print_section(f"ThreatMiner - Passive DNS Lookup ({ip})")
+    url = f"https://api.threatminer.org/v2/host.php?q={ip}&rt=2"
+    
+    # Adding headers prevents the API from blocking default Python requests
+    headers = {
+        "User-Agent": "ReconN3t/1.0 (OSINT Framework)",
+        "Accept": "application/json"
+    }
+    
+    found_domains = []
+    
+    try:
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            # ThreatMiner returns its own internal status_code inside the JSON
+            if str(data.get("status_code")) == "200" and data.get("results"):
+                results = data.get("results")
+                print(Fore.GREEN + f"ThreatMiner found {len(results)} associated domains:")
+                for item in results:
+                    domain = item.get("domain")
+                    last_seen = item.get("last_seen", "Unknown")
+                    if domain:
+                        found_domains.append({"domain": domain, "last_seen": last_seen})
+                        print(Fore.CYAN + f"[*] {domain} " + Fore.WHITE + f"(Last seen: {last_seen})")
+            else:
+                print(Fore.YELLOW + "No passive DNS records found on ThreatMiner (Empty results).")
+                
+        # Gracefully handling API backend issues
+        elif response.status_code == 404:
+            print(Fore.YELLOW + "No passive DNS records found on ThreatMiner (404 Not Found).")
+            
+        elif response.status_code == 500:
+            print(Fore.YELLOW + "[!] ThreatMiner returned a 500 Internal Server Error.")
+            print(Fore.YELLOW + "    (This usually means they have no data for this IP, or their database is temporarily down).")
+            
+        else:
+            print(Fore.RED + f"Error: Received HTTP status code {response.status_code}")
+            
+        return found_domains
+        
+    except Exception as e:
+        print(Fore.RED + f"Error during ThreatMiner lookup: {e}")
         return []
 
 def virustotal_ip_pivot(ip, api_key):
@@ -250,6 +299,11 @@ def virustotal_ip_pivot(ip, api_key):
                 print(Fore.CYAN + f"[*] {domain} " + Fore.WHITE + f"(Last resolved: {date_str})")
                 if is_high_interest:
                     print(Fore.RED + Style.BRIGHT + f"    [!] HIGH INTEREST DOMAIN: {domain}")
+            
+            if not resolutions:
+                print(Fore.YELLOW + "No domains found resolving to this IP on VirusTotal.")
+        elif response.status_code == 401:
+            print(Fore.RED + "Invalid VirusTotal API Key.")
         return vt_results
     except Exception as e:
         print(Fore.RED + f"Error during VirusTotal lookup: {e}")
@@ -298,11 +352,19 @@ def export_last_scan(last_recon_data):
                     
                 # Handle custom Option 11 nested dictionary payload
                 elif isinstance(data, dict):
-                    if "robtex_domains" in data and "virustotal_resolutions" in data:
+                    if "robtex_domains" in data or "virustotal_resolutions" in data or "threatminer_domains" in data:
                         writer.writerow(["Source", "Target IP", "Domain", "Last Resolved", "Notes"])
-                        for domain in data["robtex_domains"]:
+                        
+                        # Export Robtex
+                        for domain in data.get("robtex_domains", []):
                             writer.writerow(["Robtex", last_recon_data['target'], domain, "N/A", "Passive DNS"])
-                        for item in data["virustotal_resolutions"]:
+                            
+                        # Export ThreatMiner
+                        for item in data.get("threatminer_domains", []):
+                            writer.writerow(["ThreatMiner", last_recon_data['target'], item['domain'], item['last_seen'], "Passive DNS"])
+                            
+                        # Export VirusTotal
+                        for item in data.get("virustotal_resolutions", []):
                             notes = "High Interest (Typosquat)" if item['high_interest'] else ""
                             writer.writerow(["VirusTotal", last_recon_data['target'], item['domain'], item['last_resolved'], notes])
                     else:
@@ -337,7 +399,7 @@ def main():
         print(f"{Fore.CYAN}8.{Style.RESET_ALL} Reverse IP Lookup using ViewDNS API")
         print(f"{Fore.CYAN}9.{Style.RESET_ALL} Port Scan using ViewDNS API")
         print(f"{Fore.CYAN}10.{Style.RESET_ALL} NSLOOKUP with Custom Record Type & DNS")
-        print(f"{Fore.CYAN}11.{Style.RESET_ALL} Deep Investigate IP (Robtex + VirusTotal Pivot)")
+        print(f"{Fore.CYAN}11.{Style.RESET_ALL} Deep Investigate IP (Robtex + ThreatMiner + VirusTotal)")
         print(f"{Fore.YELLOW}12.{Style.RESET_ALL} Export Last Scan Results (CSV/JSON/TXT)")
         print(f"{Fore.CYAN}13.{Style.RESET_ALL} Exit")
 
@@ -399,6 +461,10 @@ def main():
             vt_key = get_api_key("VT_API_KEY", "Enter VirusTotal v3 API Key (leave blank to skip VT): ")
             
             robtex_data = robtex_ip_lookup(target_ip)
+            time.sleep(1) # Polite delay between external API calls
+            
+            threatminer_data = threatminer_ip_lookup(target_ip)
+            
             vt_data = []
             if vt_key:
                 time.sleep(1) 
@@ -409,9 +475,13 @@ def main():
             last_recon_data = {
                 "tool": "Deep Investigation",
                 "target": target_ip,
-                "data": {"robtex_domains": robtex_data, "virustotal_resolutions": vt_data}
+                "data": {
+                    "robtex_domains": robtex_data,
+                    "threatminer_domains": threatminer_data,
+                    "virustotal_resolutions": vt_data
+                }
             }
-            print(Fore.CYAN + "\n[!] Investigation complete. Select Option 12 from the menu to export these results.")
+            print(Fore.CYAN + "\n[!] Investigation complete. Select Option 12 from the menu to export these combined results.")
             
         elif choice == "12":
             export_last_scan(last_recon_data)
