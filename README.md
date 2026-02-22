@@ -1,64 +1,86 @@
-# ReconN3t - Advanced OSINT & Reconnaissance Framework
+ReconN3t - Advanced OSINT & Reconnaissance Framework
+====================================================
 
-ReconN3t is a command-line based network reconnaissance and Open-Source Intelligence (OSINT) framework. It provides a centralized suite of tools useful for information gathering, threat intelligence pivoting, and vulnerability assessment in the context of cybersecurity. 
+ReconN3t is a command-line based network reconnaissance and Open-Source Intelligence (OSINT) framework. It provides a centralized suite of tools useful for information gathering, threat intelligence pivoting, and vulnerability assessment in the context of cybersecurity.
 
-It integrates core command-line techniques (DNS, WHOIS) with powerful third-party APIs to gather passive DNS data, detect malicious infrastructure, and automatically generate structured incident response reports.
+It integrates core command-line techniques (DNS, WHOIS) with powerful third-party APIs to gather passive DNS data, detect malicious infrastructure, retrieve historical DNS records, and automatically generate structured incident response reports.
 
-## Features
+Features
+--------
 
-### WHOIS Lookup
-- Performs a WHOIS query to retrieve registration details about a domain or IP address.
+ReconN3t is categorized into local system binaries, free OSINT APIs, and premium/key-required APIs.
 
-### DIG SOA Lookup
-- Retrieves the Start of Authority (SOA) record for a domain using the `dig` tool, which helps in understanding the authoritative DNS information for the domain.
+### Local System Reconnaissance
 
-### DIG NS Lookup (Custom Nameserver)
-- Performs DNS NS (Nameserver) lookup using a specified custom nameserver to identify DNS routing infrastructure.
+-   **WHOIS Lookup:** Retrieves domain registration and contact details.
 
-### DIG Zone Transfer (AXFR) Lookup
-- Attempts a DNS zone transfer (AXFR) using a custom nameserver to retrieve all DNS records associated with a domain. Useful for gathering massive amounts of information from a misconfigured nameserver.
+-   **DIG SOA Lookup:** Fetches the Start of Authority (SOA) record to identify the primary nameserver and admin email.
 
-### Subdomain Enumeration (Wordlist & DIG)
-- Enumerates subdomains of a given target domain using a local wordlist and performs active DNS resolution for each via a targeted DNS server.
+-   **DIG NS Lookup (Custom Nameserver):** Performs a Nameserver lookup using a specified custom DNS server.
 
-### Subdomain Enumeration (DNSDumpster API)
-- Leverages the DNSDumpster API to passively discover subdomains, retrieving A, NS, MX, and CNAME records without sending direct traffic to the target infrastructure.
+-   **DIG Zone Transfer (AXFR):** Attempts a DNS zone transfer to retrieve all DNS records from a misconfigured nameserver.
 
-### Ping (ViewDNS API)
-- Uses the ViewDNS API to perform a ping to a domain and retrieve round-trip time (RTT) values for network diagnostics.
+-   **Subdomain Enumeration (DIG + Wordlist):** Brute-forces subdomains using a local wordlist and active DNS resolution.
 
-### Reverse IP Lookup (ViewDNS API)
-- Performs a reverse IP lookup using the ViewDNS API to find other domains hosted on the exact same IP address (Virtual Host mapping).
+-   **NSLOOKUP (Custom Record Types):** Queries specific DNS record types (A, MX, TXT, AAAA, etc.) against custom DNS servers.
 
-### Port Scan Lookup (ViewDNS API)
-- Queries the ViewDNS API to perform a remote port scan on the target domain or IP to passively detect open ports and associated services.
+### Free OSINT APIs (No Key Required)
 
-### NSLOOKUP (Custom Record Types)
-- A flexible wrapper around `nslookup` that allows you to query specific record types (A, MX, TXT, AAAA, etc.) against custom DNS servers.
+-   **Robtex Passive DNS:** Queries Robtex to find domains that previously resolved to a target IP.
 
-### Deep Investigate IP (Threat Intel Pivot)
-- **Production-Grade OSINT feature:** Automates threat intelligence pivoting against a suspect IP address. 
-- Queries **Robtex** and **ThreatMiner** for historical Passive DNS (PDNS) records to see what domains used to resolve to the IP.
-- Queries **VirusTotal v3** to find related malicious files and automatically flags domains that appear to be typosquatting attacks.
+-   **ThreatMiner Passive DNS:** Leverages ThreatMiner's threat intelligence API to map IPs to historical domains and potential malware associations.
+
+### Key-Required APIs (Configured via `.env`)
+
+-   **Subdomain Enumeration (DNSDumpster):** Passively discovers subdomains (A, NS, MX, CNAME) without sending direct traffic to the target.
+
+-   **Ping (ViewDNS):** Performs a remote ping to a domain to retrieve round-trip time (RTT) network diagnostics.
+
+-   **Reverse IP Lookup (ViewDNS):** Finds other domains hosted on the exact same IP address (Virtual Host mapping).
+
+-   **Port Scan (ViewDNS):** Passively detects open ports and associated services on a target domain/IP.
+
+-   **VirusTotal IP Pivot:** Maps an IP address to associated domains/resolutions and automatically flags potential typosquatting or high-interest domains.
+
+-   **SecurityTrails DNS History:** Retrieves historical "A" records for a domain to track infrastructure changes and old IP addresses over time.
 
 ### Universal Data Export & Reporting
-- Captures the output of *any* reconnaissance module run during the session.
-- Allows the analyst to instantly export the findings into cleanly formatted **JSON**, **CSV**, or **TXT** files for use in official incident response reports or ingestion into other tools (like Pandas or Splunk).
 
+-   Captures the output of *any* reconnaissance module run during the session.
 
+-   Allows the analyst to instantly export the findings into cleanly formatted **JSON**, **CSV**, or **TXT** files for use in official incident response reports or ingestion into other tools.
 
-# Installation 
+Prerequisites
+-------------
 
-    git clone https://github.com/tobiasGuta/BashReconKit.git
-    cd BashReconKit
-    
-# Usage
+ReconN3t requires Python 3 and a few standard system networking tools (whois, dig, nslookup).
 
-    python3 recon.py [options]
+You will also need to install the required Python libraries:
 
+pip install requests colorama pyfiglet python-dotenv
 
-![image](https://github.com/user-attachments/assets/adb1ffe6-d03f-4f0b-a127-41bc2589296c)
+Configuration (API Keys)
+------------------------
 
+To use the advanced API features without manually entering your keys every time, create a .env file in the same directory as the script and add your API keys:
 
+DNSDUMPSTER_API_KEY=your_key_here
+VIEWDNS_API_KEY=your_key_here
+VT_API_KEY=your_key_here
+SECURITYTRAILS_API_KEY=your_key_here
 
-    
+*(Note: If an API key is missing from the .env file, ReconN3t will securely prompt you to enter it during execution.)*
+
+Usage
+-----
+
+You can launch the interactive menu directly:
+```bash
+python3 recon.py
+```
+
+Or, use the new help flag to see a breakdown of all tools and their specific requirements before running:
+
+```bash
+python3 recon.py -h
+```
