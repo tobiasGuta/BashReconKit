@@ -57,7 +57,9 @@ ReconN3t requires Python 3 and a few standard system networking tools (whois, di
 
 You will also need to install the required Python libraries:
 
+```bash
 pip install requests colorama pyfiglet python-dotenv
+```
 
 Configuration (API Keys)
 ------------------------
