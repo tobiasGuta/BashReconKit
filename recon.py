@@ -9,7 +9,8 @@ from pyfiglet import figlet_format
 from dotenv import load_dotenv
 from recon_utils import (
     ReconCommandError, export_session, make_scan_record,
-    parse_ipv4_answers, run_command, safe_get,
+    parse_ipv4_answers, parse_dig_response, is_whois_rejection,
+    run_command, safe_get,
 )
 
 # Initialize colorama and load .env variables
@@ -38,22 +39,53 @@ def whois_lookup(target):
     print_section("WHOIS Lookup")
     try:
         result = run_command(["whois", target], capture_output=True, text=True, check=True)
-        print(Fore.GREEN + result.stdout)
-        return result.stdout
+        output = result.stdout.strip()
+        if is_whois_rejection(output):
+            print(Fore.YELLOW + f"WHOIS server rejected the query for {target}: "
+                  + output.splitlines()[0])
+            print(Fore.YELLOW + "WHOIS typically expects the registered domain, not an "
+                  "individual hostname or deep subdomain. Try the registrable parent.")
+            return []
+        if not output:
+            print(Fore.YELLOW + f"WHOIS returned no registration information for {target}.")
+            return []
+        print(Fore.GREEN + output)
+        return output
     except (subprocess.CalledProcessError, ReconCommandError) as e:
         print(Fore.RED + f"Error running WHOIS lookup: {e}")
         return None
+
+def explain_dns_absence(target, record_type, parsed):
+    """Explain DNS rcode and enclosing-zone authority without false positives."""
+    rcode = parsed["rcode"]
+    if rcode == "NXDOMAIN":
+        print(Fore.YELLOW + f"DNS reports NXDOMAIN for {target} (name does not exist).")
+    elif rcode == "NOERROR":
+        print(Fore.YELLOW + f"No {record_type} answer for {target} (NOERROR, empty answer).")
+    else:
+        print(Fore.YELLOW + f"No {record_type} answer for {target} "
+              + f"(DNS status: {rcode or 'unknown'}).")
+
+    soa = parsed["authority_soa"]
+    if soa:
+        print(Fore.CYAN + f"Authority section refers to zone {soa['name']} "
+              + f"(SOA primary server: {soa['value'].split()[0]}).")
+        print(Fore.CYAN + "This is parent-zone context, not an answer record "
+              "for the queried hostname.")
+    if record_type == "SOA":
+        print(Fore.CYAN + "SOA records belong to DNS zones, not every subdomain or host.")
+
 
 def dig_soa_lookup(target):
     print_section("DIG SOA Lookup")
     try:
         result = run_command(["dig", "soa", target], capture_output=True, text=True, check=True)
-        if "ANSWER SECTION" in result.stdout and " SOA " in result.stdout:
+        parsed = parse_dig_response(result.stdout, "SOA")
+        if parsed["answers"]:
             print(Fore.GREEN + result.stdout)
             return result.stdout
-        else:
-            print(Fore.YELLOW + f"No SOA record found for {target}.")
-            return None
+        explain_dns_absence(target, "SOA", parsed)
+        return []
     except (subprocess.CalledProcessError, ReconCommandError) as e:
         print(Fore.RED + f"Error running DIG SOA lookup: {e}")
         return None
@@ -74,13 +106,16 @@ def nslookup_record(domain, record_type, dns_server=None):
 def dig_custom_ns_lookup(target, nameserver):
     print_section("DIG NS Lookup (Custom Nameserver)")
     try:
-        result = run_command(["dig", "ns", target, "@"+nameserver], capture_output=True, text=True, check=True)
-        if result.stdout.strip():
+        result = run_command(
+            ["dig", "ns", target, "@" + nameserver],
+            capture_output=True, text=True, check=True,
+        )
+        parsed = parse_dig_response(result.stdout, "NS")
+        if parsed["answers"]:
             print(Fore.GREEN + result.stdout)
             return result.stdout
-        else:
-            print(Fore.YELLOW + f"No NS record found for {target}.")
-            return None
+        explain_dns_absence(target, "NS", parsed)
+        return []
     except (subprocess.CalledProcessError, ReconCommandError) as e:
         print(Fore.RED + f"Error running DIG query: {e}")
         return None

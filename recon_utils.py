@@ -3,6 +3,7 @@
 import csv
 import ipaddress
 import json
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,6 +60,61 @@ def parse_ipv4_answers(output):
         if address not in addresses:
             addresses.append(address)
     return addresses
+
+
+
+def parse_dig_response(output, record_type):
+    """Parse a standard dig response without treating authority records as answers.
+
+    The SOA in an AUTHORITY SECTION commonly describes the enclosing zone;
+    it must not be reported as an SOA response for a queried hostname.
+    """
+    match = re.search(r"\bstatus:\s*([A-Z]+)", output, re.IGNORECASE)
+    rcode = match.group(1).upper() if match else None
+    section = None
+    answers = []
+    authority_soa = None
+    wanted = record_type.upper()
+
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if line.startswith(";; ANSWER SECTION:"):
+            section = "answer"
+            continue
+        if line.startswith(";; AUTHORITY SECTION:"):
+            section = "authority"
+            continue
+        if line.startswith(";;") and "SECTION:" in line:
+            section = None
+            continue
+        if not line or line.startswith(";") or section not in ("answer", "authority"):
+            continue
+
+        columns = line.split()
+        if len(columns) < 5 or columns[2].upper() != "IN":
+            continue
+        record = {
+            "name": columns[0].rstrip("."),
+            "type": columns[3].upper(),
+            "value": " ".join(columns[4:]),
+        }
+        if section == "answer" and record["type"] == wanted:
+            answers.append(record)
+        elif section == "authority" and record["type"] == "SOA":
+            authority_soa = record
+
+    return {"rcode": rcode, "answers": answers, "authority_soa": authority_soa}
+
+
+def is_whois_rejection(output):
+    """Recognize common WHOIS rejection banners even when whois exits zero."""
+    nonempty = (line.strip().lower() for line in output.splitlines() if line.strip())
+    first_line = next(nonempty, "")
+    return first_line.startswith((
+        "malformed request",
+        "invalid query",
+        "invalid request",
+    ))
 
 
 def make_scan_record(record):
