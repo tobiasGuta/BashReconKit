@@ -38,7 +38,7 @@ ReconN3t is categorized into local system binaries, free OSINT APIs, and premium
 
 -   **Reverse IP Lookup (ViewDNS):** Finds other domains hosted on the exact same IP address (Virtual Host mapping).
 
--   **Port Scan (ViewDNS):** Passively detects open ports and associated services on a target domain/IP.
+-   **Port Scan (ViewDNS):** Retrieves third-party port-check results for a domain/IP. The provider may actively probe the target.
 
 -   **VirusTotal IP Pivot:** Maps an IP address to associated domains/resolutions and automatically flags potential typosquatting or high-interest domains.
 
@@ -46,9 +46,9 @@ ReconN3t is categorized into local system binaries, free OSINT APIs, and premium
 
 ### Universal Data Export & Reporting
 
--   Captures the output of *any* reconnaissance module run during the session.
+-   Retains the output of all successful modules run during a session, including empty-result scans.
 
--   Allows the analyst to instantly export the findings into cleanly formatted **JSON**, **CSV**, or **TXT** files for use in official incident response reports or ingestion into other tools.
+-   Exports the **whole session** as **JSON**, **CSV**, or **TXT**, with timestamps, module names, targets and results. CSV uses a consistent schema across modules.
 
 Prerequisites
 -------------
@@ -58,18 +58,19 @@ ReconN3t requires Python 3 and a few standard system networking tools (whois, di
 You will also need to install the required Python libraries:
 
 ```bash
-pip install requests colorama pyfiglet python-dotenv
+python3 -m pip install -r requirements.txt
 ```
 
 Configuration (API Keys)
 ------------------------
 
-To use the advanced API features without manually entering your keys every time, create a .env file in the same directory as the script and add your API keys:
+To use the advanced API features without manually entering your keys every time, copy `.env.example` to `.env` in the same directory as the script and add your API keys:
 
 DNSDUMPSTER_API_KEY=your_key_here
 VIEWDNS_API_KEY=your_key_here
 VT_API_KEY=your_key_here
 SECURITYTRAILS_API_KEY=your_key_here
+RECON_HIGH_INTEREST_KEYWORDS=example,brandname
 
 *(Note: If an API key is missing from the .env file, ReconN3t will securely prompt you to enter it during execution.)*
 
@@ -86,3 +87,32 @@ Or, use the new help flag to see a breakdown of all tools and their specific req
 ```bash
 python3 recon.py -h
 ```
+
+Improvements and reliability
+----------------------------
+
+- All HTTP requests have a 15-second timeout. Network errors omit request URLs to avoid printing API keys.
+- Local commands have a 20-second timeout; missing `whois`, `dig`, or `nslookup` produces a readable error.
+- Active DIG subdomain enumeration parses real IPv4 answers from `dig +short A` and deduplicates results.
+- The menu's **15. Export Session Results** option writes all scans from the current run (not just the latest).
+- VirusTotal's optional high-interest highlighting uses your own comma-separated `RECON_HIGH_INTEREST_KEYWORDS` in `.env`; no names are hardcoded.
+
+Exports are saved as `reconn3t_session_<UTC timestamp>.json|csv|txt` in the working directory and ignored by git.
+Results are retained in memory until you exit; no session is persisted automatically.
+
+Testing
+-------
+
+Run the offline test suite (no target or API keys required):
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m py_compile recon.py recon_utils.py
+```
+
+GitHub Actions runs these checks and the CLI help command on pushes and pull requests.
+
+Responsible use
+---------------
+
+Only run active DNS enumeration, AXFR attempts, or third-party port scans on assets you own or are authorized to test. Passive database lookups and active network probing have different scope implications. Check each provider's API terms and rate limits before use.

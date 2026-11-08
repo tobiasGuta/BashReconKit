@@ -1,0 +1,16 @@
+# Credentials and local environment
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Recon exports
+reconn3t_session_*.json
+reconn3t_session_*.csv
+reconn3t_session_*.txt

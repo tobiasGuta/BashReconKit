@@ -1,17 +1,16 @@
 import argparse
 import subprocess
 import os
-import requests
-import re
 import time
-import json
-import csv
-import sys
 import getpass
 from datetime import datetime
 from colorama import Fore, Style, init
 from pyfiglet import figlet_format
 from dotenv import load_dotenv
+from recon_utils import (
+    ReconCommandError, export_session, make_scan_record,
+    parse_ipv4_answers, run_command, safe_get,
+)
 
 # Initialize colorama and load .env variables
 init(autoreset=True)
@@ -38,24 +37,24 @@ def get_api_key(env_var_name, prompt_text):
 def whois_lookup(target):
     print_section("WHOIS Lookup")
     try:
-        result = subprocess.run(["whois", target], capture_output=True, text=True, check=True)
+        result = run_command(["whois", target], capture_output=True, text=True, check=True)
         print(Fore.GREEN + result.stdout)
         return result.stdout
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, ReconCommandError) as e:
         print(Fore.RED + f"Error running WHOIS lookup: {e}")
         return None
 
 def dig_soa_lookup(target):
     print_section("DIG SOA Lookup")
     try:
-        result = subprocess.run(["dig", "soa", target], capture_output=True, text=True, check=True)
-        if result.stdout.strip():
+        result = run_command(["dig", "soa", target], capture_output=True, text=True, check=True)
+        if "ANSWER SECTION" in result.stdout and " SOA " in result.stdout:
             print(Fore.GREEN + result.stdout)
             return result.stdout
         else:
             print(Fore.YELLOW + f"No SOA record found for {target}.")
             return None
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, ReconCommandError) as e:
         print(Fore.RED + f"Error running DIG SOA lookup: {e}")
         return None
 
@@ -65,64 +64,76 @@ def nslookup_record(domain, record_type, dns_server=None):
     if dns_server:
         cmd.append(dns_server)
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = run_command(cmd, capture_output=True, text=True, check=True)
         print(Fore.GREEN + result.stdout)
         return result.stdout
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, ReconCommandError) as e:
         print(Fore.RED + f"Error running nslookup: {e}")
         return None
 
 def dig_custom_ns_lookup(target, nameserver):
     print_section("DIG NS Lookup (Custom Nameserver)")
     try:
-        result = subprocess.run(["dig", "ns", target, "@"+nameserver], capture_output=True, text=True, check=True)
+        result = run_command(["dig", "ns", target, "@"+nameserver], capture_output=True, text=True, check=True)
         if result.stdout.strip():
             print(Fore.GREEN + result.stdout)
             return result.stdout
         else:
             print(Fore.YELLOW + f"No NS record found for {target}.")
             return None
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, ReconCommandError) as e:
         print(Fore.RED + f"Error running DIG query: {e}")
         return None
 
 def dig_zone_transfer_lookup(target, nameserver):
     print_section("Zone Transfer Lookup (AXFR)")
     try:
-        result = subprocess.run(["dig", "axfr", target, "@"+nameserver], capture_output=True, text=True, check=True)
-        if result.stdout.strip():
+        result = run_command(["dig", "axfr", target, "@"+nameserver], capture_output=True, text=True, check=True)
+        if "XFR size:" in result.stdout:
             print(Fore.GREEN + result.stdout)
             return result.stdout
         else:
             print(Fore.YELLOW + f"Zone transfer not allowed or no data returned for {target}.")
             return None
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, ReconCommandError) as e:
         print(Fore.RED + f"Error running zone transfer lookup: {e}")
         return None
 
 def dig_subdomain_enum(target, dns_server, wordlist_path):
     print_section("Subdomain Enumeration")
-    found_subdomains = []
     if not os.path.isfile(wordlist_path):
         print(Fore.RED + f"Error: The file {wordlist_path} does not exist.")
         return None
 
-    with open(wordlist_path, "r") as wordlist_file:
-        for subdomain in wordlist_file:
-            subdomain = subdomain.strip()
-            if subdomain:
-                subdomain_full = f"{subdomain}.{target}"
+    found_subdomains = []
+    seen = set()
+    server_args = ["@" + dns_server] if dns_server else []
+    try:
+        with open(wordlist_path, "r", encoding="utf-8") as wordlist_file:
+            for word in wordlist_file:
+                subdomain = word.strip().lower()
+                if not subdomain or subdomain.startswith("#"):
+                    continue
+                full_domain = f"{subdomain}.{target}"
                 try:
-                    result = subprocess.run(["dig", subdomain_full, "@" + dns_server], capture_output=True, text=True, check=True)
-                    output = result.stdout
-                    if "ANSWER SECTION" in output and "A" in output:
-                        matches = re.findall(rf"([\w.-]+\.{target})\s+\d+\s+IN\s+A\s+([\d.]+)", output)
-                        for domain, ip in matches:
-                            found_subdomains.append({"domain": domain, "ip": ip})
-                            print(Fore.YELLOW + f"[+] Subdomain: {Fore.GREEN}{domain} {Fore.YELLOW}→ IP: {Fore.CYAN}{ip}")
-                except subprocess.CalledProcessError as e:
-                    print(Fore.RED + f"Error with {subdomain_full}: {e}")
+                    result = run_command(
+                        ["dig", "+short", "A", full_domain, *server_args],
+                        capture_output=True, text=True, check=True,
+                    )
+                    for ip in parse_ipv4_answers(result.stdout):
+                        entry = (full_domain, ip)
+                        if entry not in seen:
+                            seen.add(entry)
+                            found_subdomains.append({"domain": full_domain, "ip": ip})
+                            print(Fore.YELLOW + f"[+] Subdomain: {Fore.GREEN}{full_domain} "
+                                  + Fore.YELLOW + f"→ IP: {Fore.CYAN}{ip}")
+                except (subprocess.CalledProcessError, ReconCommandError) as e:
+                    print(Fore.RED + f"Error resolving {full_domain}: {e}")
+    except OSError as e:
+        print(Fore.RED + f"Cannot read wordlist: {e}")
+        return None
     return found_subdomains
+
 
 def subdomain_enum_dnsdumpster(domain, api_key):
     print_section("Subdomain Enumeration - DNSDumpster")
@@ -136,7 +147,7 @@ def subdomain_enum_dnsdumpster(domain, api_key):
 
     try:
         time.sleep(2)
-        response = requests.get(url, headers=headers)
+        response = safe_get(url, headers=headers)
         if response.status_code == 429:
             print(Fore.RED + "Rate limit exceeded.")
             return None
@@ -165,7 +176,7 @@ def ping_viewdns(target, api_key):
     print_section("Ping using ViewDNS")
     try:
         url = f"https://api.viewdns.info/ping/?host={target}&apikey={api_key}&output=json"
-        response = requests.get(url)
+        response = safe_get(url)
         data = response.json()
         if "response" in data and "replys" in data["response"]:
             for reply in data["response"]["replys"]:
@@ -181,7 +192,7 @@ def reverse_ip_lookup(target, api_key):
     print_section("Reverse IP Lookup")
     try:
         url = f"https://api.viewdns.info/reverseip/?host={target}&apikey={api_key}&output=json"
-        response = requests.get(url)
+        response = safe_get(url)
         data = response.json()
         if "response" in data and "domains" in data["response"]:
             print(Fore.GREEN + f"Total domains found: {data['response']['domain_count']}")
@@ -198,7 +209,7 @@ def port_scan_lookup(target, api_key):
     print_section("Port Scan using ViewDNS")
     try:
         url = f"https://api.viewdns.info/portscan/?host={target}&apikey={api_key}&output=json"
-        response = requests.get(url)
+        response = safe_get(url)
         data = response.json()
         if "response" in data and "port" in data["response"]:
             for port in data["response"]["port"]:
@@ -217,7 +228,7 @@ def robtex_ip_lookup(ip):
     url = f"https://freeapi.robtex.com/ipquery/{ip}"
     found_domains = []
     try:
-        response = requests.get(url)
+        response = safe_get(url)
         if response.status_code == 200:
             pdns = response.json().get("pas", [])
             for item in pdns:
@@ -242,7 +253,7 @@ def threatminer_ip_lookup(ip):
     found_domains = []
     
     try:
-        response = requests.get(url, headers=headers)
+        response = safe_get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
             if str(data.get("status_code")) == "200" and data.get("results"):
@@ -278,7 +289,7 @@ def virustotal_ip_pivot(ip, api_key):
     vt_results = []
 
     try:
-        response = requests.get(url, headers=headers)
+        response = safe_get(url, headers=headers)
         if response.status_code == 200:
             resolutions = response.json().get("data", [])
             for res in resolutions:
@@ -288,7 +299,10 @@ def virustotal_ip_pivot(ip, api_key):
                 except Exception:
                     date_str = str(res['attributes']['date'])
                 
-                is_high_interest = "wayne" in domain.lower() or "po1s0n" in domain.lower()
+                keywords = [word.strip().lower() for word in
+                                     os.getenv("RECON_HIGH_INTEREST_KEYWORDS", "").split(",")
+                                     if word.strip()]
+                is_high_interest = any(word in domain.lower() for word in keywords)
                 vt_results.append({"domain": domain, "last_resolved": date_str, "high_interest": is_high_interest})
                 
                 print(Fore.CYAN + f"[*] {domain} " + Fore.WHITE + f"(Last resolved: {date_str})")
@@ -318,7 +332,7 @@ def securitytrails_dns_history(domain, api_key):
     st_results = []
 
     try:
-        response = requests.get(url, headers=headers)
+        response = safe_get(url, headers=headers)
         if response.status_code == 200:
             records = response.json().get("records", [])
             print(Fore.GREEN + f"Found {len(records)} historical records:")
@@ -354,60 +368,24 @@ def securitytrails_dns_history(domain, api_key):
 
 # Universal Export Function
 
-def export_last_scan(last_recon_data):
-    if not last_recon_data:
+def export_scan_history(scan_history):
+    if not scan_history:
         print(Fore.YELLOW + "\n[!] No scan data available to export. Please run a tool first.")
         return
 
-    print_section(f"Exporting {last_recon_data['tool']} Results for {last_recon_data['target']}")
-    choice = input(Fore.MAGENTA + "Export format (j = JSON, c = CSV, t = TXT for raw output): ").strip().lower()
-    
-    if choice not in ['j', 'c', 't']:
+    print_section(f"Exporting {len(scan_history)} scan(s) from this session")
+    choice = input(Fore.MAGENTA + "Export format (j = JSON, c = CSV, t = TXT): ").strip().lower()
+    fmt = {"j": "json", "c": "csv", "t": "txt"}.get(choice)
+    if fmt is None:
         print(Fore.RED + "Invalid format selected.")
         return
-        
-    tool_name = last_recon_data['tool'].replace(' ', '_').lower()
-    target_name = last_recon_data['target'].replace('.', '_').replace(':', '_')
-    timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    base_filename = f"{tool_name}_{target_name}_{timestamp_str}"
-    data = last_recon_data['data']
-    
-    try:
-        if choice == 'j':
-            with open(f"{base_filename}.json", 'w', encoding='utf-8') as f:
-                json.dump(last_recon_data, f, indent=4)
-            print(Fore.GREEN + Style.BRIGHT + f"[+] Saved to {base_filename}.json")
-            
-        elif choice == 'c':
-            with open(f"{base_filename}.csv", 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                
-                # Handle raw text (WHOIS/DIG)
-                if isinstance(data, str):
-                    writer.writerow(["Raw Output"])
-                    writer.writerow([data])
-                    
-                # Handle standard structured lists of dicts (All APIs now return this format)
-                elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-                    dict_writer = csv.DictWriter(f, fieldnames=data[0].keys())
-                    dict_writer.writeheader()
-                    dict_writer.writerows(data)
-                
-                # Fallback for empty lists or odd formats
-                else:
-                    writer.writerow(["Result"])
-                    for item in data:
-                        writer.writerow([item])
 
-            print(Fore.GREEN + Style.BRIGHT + f"[+] Saved to {base_filename}.csv")
-            
-        elif choice == 't':
-            with open(f"{base_filename}.txt", 'w', encoding='utf-8') as f:
-                f.write(data if isinstance(data, str) else json.dumps(last_recon_data, indent=4))
-            print(Fore.GREEN + Style.BRIGHT + f"[+] Saved to {base_filename}.txt")
-            
-    except Exception as e:
+    try:
+        destination = export_session(scan_history, fmt)
+        print(Fore.GREEN + Style.BRIGHT + f"[+] Saved to {destination}")
+    except (OSError, ValueError) as e:
         print(Fore.RED + f"Error exporting data: {e}")
+
 
 # Help Menu / Argparse Setup
 
@@ -454,7 +432,7 @@ Key-Required APIs (Add to .env file or input securely at prompt):
 def main():
     setup_argparse()  # Catch -h/--help before starting the interactive menu
     print_banner()
-    last_recon_data = None  # Stores the results of the last tool run
+    scan_history = []  # Retains all completed scans, including empty results
     
     while True:
         print(Fore.BLUE + Style.BRIGHT + "\n=== DNS & Recon Tool Menu ===" + Style.RESET_ALL)
@@ -472,7 +450,7 @@ def main():
         print(f"{Fore.MAGENTA}12.{Style.RESET_ALL} ThreatMiner Passive DNS Lookup")
         print(f"{Fore.MAGENTA}13.{Style.RESET_ALL} VirusTotal IP to Domain Pivot")
         print(f"{Fore.MAGENTA}14.{Style.RESET_ALL} SecurityTrails DNS History (A Records)")
-        print(f"{Fore.YELLOW}15.{Style.RESET_ALL} Export Last Scan Results (CSV/JSON/TXT)")
+        print(f"{Fore.YELLOW}15.{Style.RESET_ALL} Export Session Results (CSV/JSON/TXT)")
         print(f"{Fore.CYAN}16.{Style.RESET_ALL} Exit")
 
         choice = input(Fore.MAGENTA + "\nEnter your choice: ").strip()
@@ -480,78 +458,78 @@ def main():
         if choice == "1":
             target = input("Enter domain/IP for WHOIS: ").strip()
             data = whois_lookup(target)
-            if data: last_recon_data = {"tool": "WHOIS Lookup", "target": target, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "WHOIS Lookup", "target": target, "data": data}))
             
         elif choice == "2":
             target = input("Enter domain for SOA: ").strip()
             data = dig_soa_lookup(target)
-            if data: last_recon_data = {"tool": "DIG SOA", "target": target, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "DIG SOA", "target": target, "data": data}))
             
         elif choice == "3":
             target = input("Enter domain: ").strip()
             data = dig_custom_ns_lookup(target, input("Enter custom nameserver IP: ").strip())
-            if data: last_recon_data = {"tool": "DIG NS", "target": target, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "DIG NS", "target": target, "data": data}))
             
         elif choice == "4":
             target = input("Enter domain: ").strip()
             data = dig_zone_transfer_lookup(target, input("Enter custom nameserver IP: ").strip())
-            if data: last_recon_data = {"tool": "DIG AXFR", "target": target, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "DIG AXFR", "target": target, "data": data}))
             
         elif choice == "5":
             target = input("Enter target domain: ").strip()
             data = dig_subdomain_enum(target, input("Enter DNS server IP: ").strip(), input("Enter wordlist path: ").strip())
-            if data: last_recon_data = {"tool": "DIG Subdomain Enum", "target": target, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "DIG Subdomain Enum", "target": target, "data": data}))
             
         elif choice == "6":
             target = input("Enter domain: ").strip()
             data = subdomain_enum_dnsdumpster(target, get_api_key("DNSDUMPSTER_API_KEY", "Enter DNSDumpster API key: "))
-            if data: last_recon_data = {"tool": "DNSDumpster", "target": target, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "DNSDumpster", "target": target, "data": data}))
             
         elif choice == "7":
             target = input("Enter target IP/domain: ").strip()
             data = ping_viewdns(target, get_api_key("VIEWDNS_API_KEY", "Enter ViewDNS API key: "))
-            if data: last_recon_data = {"tool": "ViewDNS Ping", "target": target, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "ViewDNS Ping", "target": target, "data": data}))
             
         elif choice == "8":
             target = input("Enter target IP: ").strip()
             data = reverse_ip_lookup(target, get_api_key("VIEWDNS_API_KEY", "Enter ViewDNS API key: "))
-            if data: last_recon_data = {"tool": "ViewDNS Reverse IP", "target": target, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "ViewDNS Reverse IP", "target": target, "data": data}))
             
         elif choice == "9":
             target = input("Enter target IP: ").strip()
             data = port_scan_lookup(target, get_api_key("VIEWDNS_API_KEY", "Enter ViewDNS API key: "))
-            if data: last_recon_data = {"tool": "ViewDNS Port Scan", "target": target, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "ViewDNS Port Scan", "target": target, "data": data}))
             
         elif choice == "10":
             target = input("Enter domain: ").strip()
             dns_server = input("Enter DNS server IP (optional, leave blank for default): ").strip()
             data = nslookup_record(target, input("Enter record type: ").strip().upper(), dns_server if dns_server else None)
-            if data: last_recon_data = {"tool": "NSLOOKUP", "target": target, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "NSLOOKUP", "target": target, "data": data}))
             
         elif choice == "11":
             target_ip = input("Enter suspect IP address: ").strip()
             data = robtex_ip_lookup(target_ip)
-            if data: last_recon_data = {"tool": "Robtex Passive DNS", "target": target_ip, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "Robtex Passive DNS", "target": target_ip, "data": data}))
 
         elif choice == "12":
             target_ip = input("Enter suspect IP address: ").strip()
             data = threatminer_ip_lookup(target_ip)
-            if data: last_recon_data = {"tool": "ThreatMiner Passive DNS", "target": target_ip, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "ThreatMiner Passive DNS", "target": target_ip, "data": data}))
 
         elif choice == "13":
             target_ip = input("Enter suspect IP address: ").strip()
             vt_key = get_api_key("VT_API_KEY", "Enter VirusTotal v3 API Key: ")
             data = virustotal_ip_pivot(target_ip, vt_key)
-            if data: last_recon_data = {"tool": "VirusTotal Pivot", "target": target_ip, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "VirusTotal Pivot", "target": target_ip, "data": data}))
 
         elif choice == "14":
             target_domain = input("Enter target domain for DNS History (e.g., oracle.com): ").strip()
             st_key = get_api_key("SECURITYTRAILS_API_KEY", "Enter SecurityTrails API Key: ")
             data = securitytrails_dns_history(target_domain, st_key)
-            if data: last_recon_data = {"tool": "SecurityTrails DNS History", "target": target_domain, "data": data}
+            if data is not None: scan_history.append(make_scan_record({"tool": "SecurityTrails DNS History", "target": target_domain, "data": data}))
 
         elif choice == "15":
-            export_last_scan(last_recon_data)
+            export_scan_history(scan_history)
             
         elif choice == "16":
             print(Fore.RED + "Exiting ReconN3t...")
