@@ -95,6 +95,8 @@ Improvements and reliability
 - Local commands have a 20-second timeout; missing `whois`, `dig`, or `nslookup` produces a readable error.
 - Active DIG subdomain enumeration parses real IPv4 answers from `dig +short A` and deduplicates results.
 - The menu's **15. Export Session Results** option writes all scans from the current run (not just the latest).
+- SOA/NS lookups count only records in the DNS **ANSWER** section. If there are none, the program explains `NOERROR` vs `NXDOMAIN` and shows the **AUTHORITY** section's parent-zone SOA as context, without reporting it as a finding.
+- WHOIS recognizes common rejection banners such as `Malformed request.` even when the local `whois` command returns exit code 0. For hostnames like `diggingforanswers.chals.mctf.io`, query the registrable domain (e.g. `mctf.io`) when registration details are the goal.
 - VirusTotal's optional high-interest highlighting uses your own comma-separated `RECON_HIGH_INTEREST_KEYWORDS` in `.env`; no names are hardcoded.
 
 Exports are saved as `reconn3t_session_<UTC timestamp>.json|csv|txt` in the working directory and ignored by git.
