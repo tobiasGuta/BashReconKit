@@ -89,7 +89,7 @@ def dig_zone_transfer_lookup(target, nameserver):
     print_section("Zone Transfer Lookup (AXFR)")
     try:
         result = run_command(["dig", "axfr", target, "@"+nameserver], capture_output=True, text=True, check=True)
-        "XFR size:" in result.stdout:
+        if "XFR size:" in result.stdout:
             print(Fore.GREEN + result.stdout)
             return result.stdout
         else:
